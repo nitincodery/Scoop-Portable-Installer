@@ -734,6 +734,45 @@ $SCOOP_MAIN_BUCKET_REPO = 'https://github.com/ScoopInstaller/Main/archive/master
 $SCOOP_PACKAGE_GIT_REPO = 'https://github.com/nitincodery/Scoop-Portable.git'
 $SCOOP_MAIN_BUCKET_GIT_REPO = 'https://github.com/ScoopInstaller/Main.git'
 
+# Write scoob.cmd file to initialize local scoop via cmd
+$scoobCmd = @'
+@echo off
+REM Get the directory of this script
+set SCRIPT_DIR=%~dp0
+
+REM Set SCOOP environment variable to local scoop folder inside script directory
+set "SCOOP=%SCRIPT_DIR%\scoop"
+set "SCOOP_GLOBAL=%SCRIPT_DIR%\scoop-global"
+
+REM Update PATH to use local scoop shims ONLY (prepend so it takes priority)
+set "PATH=%SCOOP%\shims;%PATH%"
+echo Local Scoop Enabled.
+
+scoop config
+'@
+
+Set-Content -Path (Join-Path $scriptDir 'scoob.cmd') -Value $scoobCmd -Encoding ASCII
+
+# Write scoob.ps1 file to initialize local scoop via powershell
+$scoobPs1 = @"
+# Get the directory of this script
+`$ScriptDir = Split-Path -Parent `$MyInvocation.MyCommand.Path
+
+# Set SCOOP environment variables to local scoop folders inside the script directory
+`$env:SCOOP = Join-Path `$ScriptDir 'scoop'
+`$env:SCOOP_GLOBAL = Join-Path `$ScriptDir 'scoop-global'
+
+# Prepend local scoop shims to PATH so it takes priority
+`$env:PATH = "`$(`$env:SCOOP)\shims;`$env:PATH"
+
+Write-Output "Local Scoop Enabled."
+
+# Show current scoop config
+scoop config
+"@
+
+Set-Content -Path (Join-Path $scriptDir 'scoob.ps1') -Value $scoobPs1 -Encoding UTF8
+
 # Ensure first drive is NTFS or not
 Ensure-NTFS $scriptDir
 
