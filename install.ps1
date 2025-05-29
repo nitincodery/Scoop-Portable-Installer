@@ -707,8 +707,12 @@ $IS_EXECUTED_FROM_IEX = ($null -eq $MyInvocation.MyCommand.Path)
 # Abort when the language mode is restricted
 Test-LanguageMode
 
-# Get directory of the running install.ps1 script
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+# Determine script directory
+$scriptDir = if ($IS_EXECUTED_FROM_IEX) {
+    Get-Location
+} else {
+    Split-Path -Parent $MyInvocation.MyCommand.Path
+}
 
 # Define all Scoop-related directories relative to script directory
 # Scoop root directory
