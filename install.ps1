@@ -655,6 +655,34 @@ function Install-Scoop {
     Write-InstallInfo "Type 'scoop help' for instructions."
 }
 
+function Ensure-NTFS($path) {
+    if (-not (Test-Path $path)) {
+        Write-Host "`n[!] ERROR: Path '$path' does not exist." -ForegroundColor Red
+        exit 1
+    }
+
+    $drive = (Get-Item -Path $path).PSDrive.Root.TrimEnd('\')
+    $fsinfo = & fsutil fsinfo volumeinfo $drive 2>$null
+
+    $fs = $null
+    if ($fsinfo) {
+        foreach ($line in $fsinfo) {
+            if ($line -match 'File System Name\s+:\s+(\S+)') {
+                $fs = $matches[1]
+                break
+            }
+        }
+    }
+
+    if ($fs -ne 'NTFS') {
+        Write-Host "`n[!] Scoop must be installed on an NTFS drive." -ForegroundColor Red
+        Write-Host "    Detected file system on drive '$drive': $fs. `n" -ForegroundColor Yellow
+        Write-Host "    Please choose an NTFS-formatted drive and try again.`n" -ForegroundColor Yellow
+        exit 1
+    }
+}
+
+
 function Write-DebugInfo {
     param($BoundArgs)
 
@@ -705,6 +733,9 @@ $SCOOP_MAIN_BUCKET_REPO = 'https://github.com/ScoopInstaller/Main/archive/master
 
 $SCOOP_PACKAGE_GIT_REPO = 'https://github.com/nitincodery/Scoop-Portable.git'
 $SCOOP_MAIN_BUCKET_GIT_REPO = 'https://github.com/ScoopInstaller/Main.git'
+
+# Ensure first drive is NTFS or not
+Ensure-NTFS $scriptDir
 
 # Quit if anything goes wrong
 $oldErrorActionPreference = $ErrorActionPreference
