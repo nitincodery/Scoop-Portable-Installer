@@ -164,11 +164,25 @@ function Test-Prerequisite {
     if ((Get-ExecutionPolicy).ToString() -notin $allowedExecutionPolicy) {
         Deny-Install "PowerShell requires an execution policy in [$($allowedExecutionPolicy -join ', ')] to run Scoop. For example, to set the execution policy to 'RemoteSigned' please run 'Set-ExecutionPolicy RemoteSigned -Scope CurrentUser'."
     }
+    
+    # Assuming $SCOOP_DIR is set to your local scoop path
+    $localScoopExe = Join-Path $SCOOP_SHIMS_DIR 'scoop.ps1'
 
-    # Test if scoop is installed, by checking if scoop command exists.
-    if (Test-CommandAvailable('scoop')) {
-        Deny-Install "Scoop is already installed. Run 'scoop update' to get the latest version."
+    if (Test-Path $localScoopExe) {
+	Write-Output "Local Scoop installation found at $localScoopExe"
+	# Allow install or update local scoop here
+    } else {
+	# No local scoop detected, but system-wide scoop might exist
+	$scoopCmd = Get-Command scoop -ErrorAction SilentlyContinue
+	if ($scoopCmd) {
+            Write-Output "System-wide Scoop detected at $($scoopCmd.Path), ignoring for local install"
+            # Do NOT deny install, since local scoop isn't present
+	} else {
+            Write-Output "No Scoop detected at all"
+            # Proceed with install
+	}
     }
+
 }
 
 function Optimize-SecurityProtocol {
@@ -520,40 +534,24 @@ function Add-Config {
 }
 
 function Add-DefaultConfig {
-    # If user-level SCOOP env not defined, save to root_path
-    if (!(Get-Env 'SCOOP')) {
-        if ($SCOOP_DIR -ne "$env:USERPROFILE\scoop") {
-            Write-Verbose "Adding config root_path: $SCOOP_DIR"
-            Add-Config -Name 'root_path' -Value $SCOOP_DIR | Out-Null
-        }
+    # Always write to local scoop config — no env or userprofile checks
+
+    # Set root path explicitly
+    if ($SCOOP_DIR) {
+        Write-Verbose "Setting config root_path: $SCOOP_DIR"
+        Add-Config -Name 'root_path' -Value $SCOOP_DIR | Out-Null
     }
 
-    # Use system SCOOP_GLOBAL, or set system SCOOP_GLOBAL
-    # with $env:SCOOP_GLOBAL if RunAsAdmin, otherwise save to global_path
-    if (!(Get-Env 'SCOOP_GLOBAL' -global)) {
-        if ((Test-IsAdministrator) -and $env:SCOOP_GLOBAL) {
-            Write-Verbose "Setting System Environment Variable SCOOP_GLOBAL: $env:SCOOP_GLOBAL"
-            [Environment]::SetEnvironmentVariable('SCOOP_GLOBAL', $env:SCOOP_GLOBAL, 'Machine')
-        } else {
-            if ($SCOOP_GLOBAL_DIR -ne "$env:ProgramData\scoop") {
-                Write-Verbose "Adding config global_path: $SCOOP_GLOBAL_DIR"
-                Add-Config -Name 'global_path' -Value $SCOOP_GLOBAL_DIR | Out-Null
-            }
-        }
+    # Set global path explicitly
+    if ($SCOOP_GLOBAL_DIR) {
+        Write-Verbose "Setting config global_path: $SCOOP_GLOBAL_DIR"
+        Add-Config -Name 'global_path' -Value $SCOOP_GLOBAL_DIR | Out-Null
     }
 
-    # Use system SCOOP_CACHE, or set system SCOOP_CACHE
-    # with $env:SCOOP_CACHE if RunAsAdmin, otherwise save to cache_path
-    if (!(Get-Env 'SCOOP_CACHE' -global)) {
-        if ((Test-IsAdministrator) -and $env:SCOOP_CACHE) {
-            Write-Verbose "Setting System Environment Variable SCOOP_CACHE: $env:SCOOP_CACHE"
-            [Environment]::SetEnvironmentVariable('SCOOP_CACHE', $env:SCOOP_CACHE, 'Machine')
-        } else {
-            if ($SCOOP_CACHE_DIR -ne "$SCOOP_DIR\cache") {
-                Write-Verbose "Adding config cache_path: $SCOOP_CACHE_DIR"
-                Add-Config -Name 'cache_path' -Value $SCOOP_CACHE_DIR | Out-Null
-            }
-        }
+    # Set cache path explicitly
+    if ($SCOOP_CACHE_DIR) {
+        Write-Verbose "Setting config cache_path: $SCOOP_CACHE_DIR"
+        Add-Config -Name 'cache_path' -Value $SCOOP_CACHE_DIR | Out-Null
     }
 
     # save current datatime to last_update
@@ -681,27 +679,31 @@ $IS_EXECUTED_FROM_IEX = ($null -eq $MyInvocation.MyCommand.Path)
 # Abort when the language mode is restricted
 Test-LanguageMode
 
+# Get directory of the running install.ps1 script
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# Define all Scoop-related directories relative to script directory
 # Scoop root directory
-$SCOOP_DIR = $ScoopDir, $env:SCOOP, "$env:USERPROFILE\scoop" | Where-Object { -not [String]::IsNullOrEmpty($_) } | Select-Object -First 1
+$SCOOP_DIR = Join-Path $scriptDir 'scoop'
 # Scoop global apps directory
-$SCOOP_GLOBAL_DIR = $ScoopGlobalDir, $env:SCOOP_GLOBAL, "$env:ProgramData\scoop" | Where-Object { -not [String]::IsNullOrEmpty($_) } | Select-Object -First 1
+$SCOOP_GLOBAL_DIR = Join-Path $scriptDir 'scoop-global'
 # Scoop cache directory
-$SCOOP_CACHE_DIR = $ScoopCacheDir, $env:SCOOP_CACHE, "$SCOOP_DIR\cache" | Where-Object { -not [String]::IsNullOrEmpty($_) } | Select-Object -First 1
+$SCOOP_CACHE_DIR = Join-Path $SCOOP_DIR '.cache'
 # Scoop shims directory
-$SCOOP_SHIMS_DIR = "$SCOOP_DIR\shims"
+$SCOOP_SHIMS_DIR = Join-Path $SCOOP_DIR 'shims'
 # Scoop itself directory
-$SCOOP_APP_DIR = "$SCOOP_DIR\apps\scoop\current"
+$SCOOP_APP_DIR = Join-Path $SCOOP_DIR 'apps\scoop\current'
 # Scoop main bucket directory
-$SCOOP_MAIN_BUCKET_DIR = "$SCOOP_DIR\buckets\main"
+$SCOOP_MAIN_BUCKET_DIR = Join-Path $SCOOP_DIR 'buckets\main'
 # Scoop config file location
-$SCOOP_CONFIG_HOME = $env:XDG_CONFIG_HOME, "$env:USERPROFILE\.config" | Select-Object -First 1
-$SCOOP_CONFIG_FILE = "$SCOOP_CONFIG_HOME\scoop\config.json"
+$SCOOP_CONFIG_HOME = Join-Path $SCOOP_DIR 'config'
+$SCOOP_CONFIG_FILE = Join-Path $SCOOP_CONFIG_HOME 'config.json'
 
 # TODO: Use a specific version of Scoop and the main bucket
-$SCOOP_PACKAGE_REPO = 'https://github.com/ScoopInstaller/Scoop/archive/master.zip'
+$SCOOP_PACKAGE_REPO = 'https://github.com/nitincodery/Scoop-Portable/archive/master.zip'
 $SCOOP_MAIN_BUCKET_REPO = 'https://github.com/ScoopInstaller/Main/archive/master.zip'
 
-$SCOOP_PACKAGE_GIT_REPO = 'https://github.com/ScoopInstaller/Scoop.git'
+$SCOOP_PACKAGE_GIT_REPO = 'https://github.com/nitincodery/Scoop-Portable.git'
 $SCOOP_MAIN_BUCKET_GIT_REPO = 'https://github.com/ScoopInstaller/Main.git'
 
 # Quit if anything goes wrong
