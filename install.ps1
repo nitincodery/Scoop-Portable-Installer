@@ -780,6 +780,21 @@ Set-Content -Path (Join-Path $scriptDir 'scoob.ps1') -Value $scoobPs1 -Encoding 
 # Ensure first drive is NTFS or not
 Ensure-NTFS $scriptDir
 
+# Define default config to avoid any problems with system scoop
+$CONFIG = @{
+    root_path     = $SCOOP_DIR
+    global_path   = $SCOOP_GLOBAL_DIR
+    cache_path    = $SCOOP_CACHE_DIR
+    scoop_repo    = 'https://github.com/nitincodery/Scoop-Portable'
+    scoop_branch  = 'master'
+}
+
+# Ensure config directory exists
+New-Item -ItemType Directory -Path $SCOOP_CONFIG_HOME -Force | Out-Null
+
+# Write config file
+$CONFIG | ConvertTo-Json -Depth 3 | Set-Content -Encoding UTF8 -Path $SCOOP_CONFIG_FILE
+
 # Quit if anything goes wrong
 $oldErrorActionPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Stop'
